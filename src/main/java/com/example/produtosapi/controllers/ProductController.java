@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.example.produtosapi.exceptions.EntityNotFoundException;
+import com.example.produtosapi.services.ProductService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -29,11 +31,11 @@ import jakarta.validation.Valid;
 public class ProductController {
 
   @Autowired
-  ProductRepository productRepository;
+  ProductService service;
 
   @GetMapping("/products")
   public ResponseEntity<List<ProductModel>> listProducts() {
-    List<ProductModel> productsList = productRepository.findAll();
+    List<ProductModel> productsList = service.list();
     if(!productsList.isEmpty()){
       for(ProductModel product : productsList) {
         UUID id = product.getIdProduct();
@@ -45,44 +47,45 @@ public class ProductController {
 
   @GetMapping("/products/{id}")
   public ResponseEntity<Object> findOneProduct(@PathVariable(value = "id") UUID id) {
-    Optional<ProductModel> productO = productRepository.findById(id);
-    if (productO.isEmpty()) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product not found");
+
+    ProductModel product;
+    try {
+      product = service.findById(id);
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
-    var product = productO.get();
     product.add(linkTo(methodOn(ProductController.class).listProducts()).withRel("Products List"));
     return ResponseEntity.status(HttpStatus.OK).body(product);
   }
 
   @PostMapping("/products")
   public ResponseEntity<ProductModel> saveProduct(@RequestBody @Valid ProductRecordDto productRecordDto) {
-    var productModel = new ProductModel();
-    BeanUtils.copyProperties(productRecordDto, productModel);
-    return ResponseEntity.status(HttpStatus.CREATED).body(productRepository.save(productModel));
+    return ResponseEntity.status(HttpStatus.CREATED).body(service.create(productRecordDto));
   }
 
   @PutMapping("/products/{id}")
   public ResponseEntity<Object> updateProduct(@PathVariable(value = "id") UUID id,
       @RequestBody @Valid ProductRecordDto productRecordDto) {
-    Optional<ProductModel> productO = productRepository.findById(id);
-    if (productO.isEmpty()) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product not found.");
+    ProductModel productModel;
+    try {
+      productModel = service.findById(id);
+    } catch (EntityNotFoundException e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
 
-    var productModel = productO.get();
-    BeanUtils.copyProperties(productRecordDto, productModel);
-
-    return ResponseEntity.status(HttpStatus.OK).body(productRepository.save(productModel));
+    return ResponseEntity.status(HttpStatus.OK).body(service.update(productRecordDto, productModel));
   }
 
   @DeleteMapping("/products/{id}")
   public ResponseEntity<Object> deleteProduct(@PathVariable(value = "id") UUID id) {
-    Optional<ProductModel> productO = productRepository.findById(id);
-    if(productO.isEmpty()) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product not found.");
+    ProductModel productModel;
+    try {
+      productModel = service.findById(id);
+    } catch (EntityNotFoundException e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
 
-    productRepository.delete(productO.get());
+    service.delete(productModel);
 
     return ResponseEntity.status(HttpStatus.OK).body("Product deleted successfully.");
   }
